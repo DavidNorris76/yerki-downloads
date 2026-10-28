@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(gh api repos/$GH_REPO/releases/tags/v0.1.30-mac-beta --jq .draft)" = true
+          test "$(gh api repos/$GH_REPO/releases/426807486 --jq .draft)" = true
           printf '%s\n' '9e829d4484d437a9c6c491c9feab9eb4cb5227fce6ce7560a9d9c7c2e5ba4212  Yerki-Beta-0.1.30-mac-arm64.dmg' > SHA256SUMS.txt
           gh release upload v0.1.30-mac-beta signed/Yerki-Beta-0.1.30-mac-arm64.dmg SHA256SUMS.txt --clobber
           gh release edit v0.1.30-mac-beta --draft=false --prerelease --target main
