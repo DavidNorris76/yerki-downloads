@@ -1,0 +1,50 @@
+name: Publish verified Mac download
+on:
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: Temporary download URL for the already-signed release archive
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 8
+    env:
+      SOURCE_URL: ${{ inputs.source_url }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Retrieve and verify the existing signed release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, urllib.parse
+          u=urllib.parse.urlparse(os.environ["SOURCE_URL"])
+          assert u.scheme=="https" and u.hostname.endswith(".oaiusercontent.com")
+          PY
+          curl --fail --location --retry 3 --silent --show-error "$SOURCE_URL" -o signed.zip
+          echo "aefd1c7b517c10ae668a16baff76aaa17142f8a333389be488a0eac56e20bd0d  signed.zip" | sha256sum -c -
+          unzip -q signed.zip -d signed
+          cd signed
+          sha256sum -c SHA256SUMS.txt
+          python3 - <<'PY'
+          import json
+          p=json.load(open("release-proof.json"))
+          assert p["sourceSha"]=="0b92314902aee1ac870bbdae50c0d9fba89e464d"
+          assert p["signed"] is True and p["notarized"] is True
+          assert p["artifactSha256"]=="9e829d4484d437a9c6c491c9feab9eb4cb5227fce6ce7560a9d9c7c2e5ba4212"
+          PY
+      - name: Publish public installer and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/$GH_REPO/releases/tags/v0.1.30-mac-beta --jq .draft)" = true
+          printf '%s\n' '9e829d4484d437a9c6c491c9feab9eb4cb5227fce6ce7560a9d9c7c2e5ba4212  Yerki-Beta-0.1.30-mac-arm64.dmg' > SHA256SUMS.txt
+          gh release upload v0.1.30-mac-beta signed/Yerki-Beta-0.1.30-mac-arm64.dmg SHA256SUMS.txt --clobber
+          gh release edit v0.1.30-mac-beta --draft=false --prerelease --target main
